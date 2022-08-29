@@ -1,6 +1,42 @@
-//------------------LLIBRERIES--------------------------------------------
+/***************************************************************************
+ * 
+ * TREBALL DE FI DE GRAU 
+ * ENGINYERIA QUÍMICA - IQS 
+ * CURS 2021/2022
+ * 
+ * ESTACIÓ DE CONTROL DE QUALITAT D'AIGUA
+ * 
+ * @INFORMACIÓ GENERAL
+ * @Autor: Joaquim Anglada Martínez
+ * @Director: Javier Fernández
+ * @Codirector: Rubén Mercadé
+ * @Data de creació: diumenge 13 de març de 2022
+ * @Data última modificació: diumenge 10 de juliol de 2022
+ * 
+ **************************************************************************/
+
+//------------------LLIBRERIES----------------------------------------------
+/***************************************************************************
+ * 
+ * @Resum: Conjunt de llibreries necessaries pel funcionament de l'estació
+ * @Comentari:  Els autors de les diferents llibreries i les versions 
+ *              utilitzades es poden trobar en l'apartat Biblioteques del
+ *              del fitxer README.md https://github.com/QuimAnglada/TFG-ECQA 
+ * 
+ *              TFT_          GPIO corresponent.
+ *              FS_NO_GLOBALS S'ha de definir prèviament a FS.h i permet la 
+ *                            coexistència de LittleFS i la memòria SD.
+*               SDMMC_func.h  Fitxer auxiliar amb les funcions necessàries 
+*                             pel tractament d'arxius.
+*               SoftwareWire myWire(13, 16) 
+*                             13 i 16 GPIO SDA i SCL respectivament.
+*               PNG_func.h    Fitxer auxiliar amb les funcions necessàries               
+*                             pel tractament d'imatges format .png.
+*                             
+ **************************************************************************/
+
+//-------------- MOD-LCD2.8RTP Screen --------------------------------------
 #include "Wire.h"
-//-------------- MOD-LCD2.8RTP Screen configuration ------------------------
 #include "Adafruit_STMPE610.h"
 #include <Arduino_GFX_Library.h>
 
@@ -12,9 +48,9 @@
 #define TFT_RST 0
 
 Arduino_DataBus *bus = new Arduino_ESP32SPI(TFT_DC, TFT_CS, TFT_CLK, TFT_MOSI, TFT_MISO);
-Arduino_GFX *gfx = new Arduino_ILI9341(bus, TFT_RST, 0 /* rotation */);
+Arduino_GFX *gfx = new Arduino_ILI9341(bus, TFT_RST, 0 );
 
-//--------------llibreries Littlefs i SDmmc---------------
+//--------------------- Littlefs i SDmmc -----------------------------------
 #define FS_NO_GLOBALS 
 #include "FS.h"
 #include "LITTLEFS.h"
@@ -42,34 +78,69 @@ Arduino_GFX *gfx = new Arduino_ILI9341(bus, TFT_RST, 0 /* rotation */);
     ADS1115<TwoWire> ads(Wire);
 #endif
 
-//--------------------------Sensor temperatura--------------------
+//------------------------- Sensor temperatura -------------------
 #include <OneWire.h>
 #include <DallasTemperature.h>
 
-//--------------------------Sensor Sòlids dissolts--------------------
+//------------------------- Sensor Sòlids dissolts -------------------
 #include <Preferences.h>
 
-//-------------- PNG images ------------------------
+//----------------------- PNG images --------------------------------
 #include <PNGdec.h>
 
-//----------------------Configuració images PNG--------------------
+//---------------------- Imatges PNG --------------------------------
 PNG png;
 fs::File pngFile;
 int16_t w, h, xOffset, yOffset;
 #include "PNG_func.h" 
 
 //-------------------------CONFIGURACIONS-----------------------
-//--------------------------Configuració Wifi--------------------
-//Substitueix "usuari" i "contrasenya" per les credencials de la teva xarxa
+/***************************************************************************
+ * 
+ * @Resum: Configuració dels elements que constitueixen l'estació
+ * @Comentari:  ssid      Nom de la xarxa Wi-Fi.          
+ *              password  Contrasenya de la xarxa Wi-Fi. Substitueix "usuari" 
+ *                        i "contrasenya" per les credencials de la teva xarxa.
+ *              ntpServer Direcció del servidor Network Time Protocol (NTP)
+ *                        que farem servir. 
+ *              gmtOffset_sec 
+ *                        Variable que s'utilitza per determinar la franja
+ *                        horària. Barcelona es troba a la franja horària 
+ *                        UTC+1.00 que correspon a un valor de 3600.         
+ *              daylightOffset_sec 
+ *                        Variable utilitzada per definir si es produeix              
+ *                        el canvi d'hora o no dues vegades a l'any.
+ *                        Si es modifica dues vegades, el valor és 3600.
+ *                        Si l'horari no és modificat, el valor és 0.
+ *              mqtt_server 
+ *                        La teva adreça IP en la Wi-Fi a la qual l'estació                   
+ *                        està connectada. Substitueix "192.168.1.1" per la teva 
+ *                        adreça IP.
+ *              oneWireBus  
+ *                        GPIO on es troba connectat el sensor DS18B20.            
+ *              TdsFactor Variable per calcular els sòlids dissolts o la conducti-
+ *                        vitat.  Valor 0,5 per calcular els sòlids dissolts.           
+ *                                Valor 1 per calcular la conductivitat.
+ *              OffSet    Variable per corregir el voltat de sortida. Pren el valor                     
+ *                        mínim adquirit pel sensor quan no és connectat en una 
+ *                        canonada.
+ *                        Valor experimental obtingut: 0,458.
+ *             pHSensorPin  
+ *                        GPIO sensor de pH.                  
+ *             TS_MIN/MAX Valors per calibrar la pantalla tàctil. 
+ *             
+ **************************************************************************/
+
+//-------------------------- Wifi --------------------
 const char* ssid = "usuari";
 const char* password = "contasenya";
 
-//-------------------------Configuració NTP-----------------------
+//------------------------- NTP -----------------------
 const char* ntpServer = "europe.pool.ntp.org";
 const long  gmtOffset_sec = 3600;
 const int   daylightOffset_sec = 3600;
 
-//----------------------Configuració servidor mqtt---------------
+//---------------------- Servidor mqtt ---------------
 int pot;
 char data_pot[4]="";
 char data_temp[12]="";
@@ -77,12 +148,9 @@ char data_tds[12]="";
 char data_tss[12]="";
 char data_pre[12]="";
 char data_ph[12]="";
-char data_voltss[12]="";
-char data_volph[12]="";
 char data_digital[2]="";
 String messageData;
 
-//Substitueix "192.168.1.1" per la teva direcció IP
 const char* mqtt_server="192.168.1.1"; 
 
 WiFiClient esp32;
@@ -93,22 +161,22 @@ long tdhtx = 0;
 char msg[50];
 int value = 0;
 
-//------------------------Configuració RTC--------------------------
+//----------------------- RTC --------------------------
 ESP32Time rtc;
 
-//------------Configuració funció LITTLEFS to SD MMC---------------
+//------------ Funció LITTLEFS to SD MMC ---------------
 char *pathChar;
 
-//------------Configuració ADS1115---------------------
+//------------ ADS1115 ---------------------
 int16_t adc0,adc1,adc2,adc3;
 
-//------------Configuració sensor temperatura---------------------
+//------------ Sensor temperatura ---------------------
 const int oneWireBus = 18;     
 OneWire oneWire(oneWireBus); 
 DallasTemperature sensorT(&oneWire);
 float temperatureC, lastTemperature = 0, maxT, minT = 1000;
 
-//------------Configuració sensor sòlids totals dissolts-------------------
+//------------ Sensor sòlids totals dissolts -------------------
 Preferences preferences;
 int tdsValue, lastTdsValue, TDS, maxTds, minTds = 10000;
 float TdsFactor = 0.5;
@@ -116,19 +184,19 @@ float voltage, kValue;
 long ecValue, ecValue25;
 String DataTDS, HoraTDS;
 
-//------------Configuració sensor Terbolesa-------------------
+//------------ Sensor Terbolesa-------------------
 float voltageTSS, NTU, lastNTU = -1, maxNTU = -1, minNTU = 10000;
 
-//------------Configuració sensor Pressió-------------------
+//------------  Sensor Pressió -------------------
 const float  OffSet = 0.458 ;
 float V, P, lastPValue, maxP, minP = 1000;
 
-//------------Configuració sensor pH-------------------
+//------------ Sensor pH -------------------
 float aValue, nValue, pendent, ordenada, pH, lastpHValue, maxpH, minpH = 20;
 String DatapH4, HorapH4, DatapH7, HorapH7;
 int pHSensorPin = 39;
 
-//----------------------Configuració pantalla tàctil--------------------
+//---------------------- Pantalla tàctil --------------------
 #define TS_MINX 290
 #define TS_MINY 285
 #define TS_MAXX 7520
@@ -136,7 +204,27 @@ int pHSensorPin = 39;
 #define TS_I2C_ADDRESS 0x4d 
 Adafruit_STMPE610 ts = Adafruit_STMPE610();
 
-//--------------------Global variables-----------------------------
+//-------------------- Variables Globals -----------------------------
+/***************************************************************************
+ * 
+ * @Resum: Definició de variables auxiliars.
+ * @Comentari:  modeOpe variable on s'emmagatzema el mode d'operació escollit.
+ *              i       Nombre de mesures que s'han realitzat.
+ *              a       Nombre de vegades que s'han emmagatzemat les dades de 
+ *                      littlefs a la targeta SD.
+ *              TimeNow Hora en la qual s'ha tocat la pantalla expressada en segons.        
+ *              TimePressed 
+ *                      Hora en la qual s'havia tocat la pantalla per última 
+ *                      vegada expressada en segons.
+ *              TimeBackup  
+ *                      Hora actual expressada en segons.
+ *              TimeLastBackup 
+ *                      Hora en la qual s'ha realitzat l'última còpia de
+ *                      de seguretat expressada en segons.
+ *              Minuts  Interval de temps entre còpies de seguretat.         
+ *             
+ **************************************************************************/
+
 int modeOpe, i = 0; 
 int ButtonPressed = 0;
 int a = 0; 
@@ -145,6 +233,20 @@ unsigned long TimePressed = 0;
 unsigned long TimeBackup = 0;
 unsigned long TimeLastBackup = 0;
 int Minuts = 30; 
+
+//-------------------- SETUP -----------------------------
+/***************************************************************************
+ * 
+ * @Resum: Inicialització de l'estació i selecció del mode d'operació.
+ * @Comentari:  Si el mode d'operació escollit és el LOCAL (modeOpe = 1)
+ *              es desconnecta l'estació de la xarxa Wi-Fi perquè aquesta no 
+ *              es requerida pel funcionament.
+ *              Si el mode d'operació escollit és el MQTT (modeOpe = 2) es 
+ *              connecta l'estació al broker (client.setServer(mqtt_server,
+ *              1883)) on s'indica l'adreça IP amb mqtt_server i el port
+ *              corresponent 1883.
+ * 
+ **************************************************************************/
 
 void setup() {
  Serial.begin(115200);
@@ -189,6 +291,36 @@ void setup() {
   TimeLastBackup = rtc.getSecond() + rtc.getMinute() * 60 + rtc.getHour() * 3600;
 }
 
+//-------------------- LOOP -----------------------------
+/***************************************************************************
+ * 
+ * @Resum:  Seguit d'instruccions que s'executen en bucle pel funcionament de
+ *          l'estació.
+ * @Comentari:  En primer lloc, es reconnecta l'estació al broker en cas que 
+ *              aquesta hagi estat desconnectada a través de la funció reconnect().
+ *              Aquesta acció només té lloc si el mode d'operació escollit és el 
+ *              MQTT (modeOpe = 2).
+ *              A continuació, es mesuren els paràmetres i registren les dades 
+ *              adquirides amb la funció writeLITTLEFS().
+ *              Amb la funció Get_Button() s'ofereix a l'usuari la possibilitat 
+ *              d'interactuar amb l'estació a través de la pantalla tàctil.
+ *              Depenen de quin botó s'hagi clicat s'executa una funció o altra, 
+ *              s'exposa amb més detall cada una de les funcions al final del bucle
+ *              loop.
+ *              Si fa més de 30 minuts des de l'última còpia de seguretat es realitza 
+ *              una de nova amb la funció LITTLEFStoSD().
+ *              En últim lloc, si el mode d'operació escollit és el MQTT (modeOpe = 2)
+ *              es publiquen les mesures realitzades. Les dades es publiquen en format 
+ *              char. Per aquest motiu els números en els diferents formats (int o float)
+ *              són convertits a char mitjançant la funció sprintf.
+ *                p. ex: sprintf (data_temp,"%3.2f",temperatureC);
+ *              Per publicar una mesura s'indica el tòpic i el char a la funció 
+ *              client.publsih(), el tòpic és el mateix que s'ha d'introduir al software 
+ *              Node-Red per rebre les publicacions.
+ *                p. ex: client.publish("temperatura", data_temp);                    
+ *        
+ **************************************************************************/
+ 
 void loop() {
   if (modeOpe == 2) {
     if (!client.connected()) {
@@ -311,12 +443,41 @@ void loop() {
 }
 
 //---------------------------FUNCIONS----------------------
+/***************************************************************************
+ * @Funció: initSCREEN()
+ * @Resum:  Inicialització de la pantalla tàctil.  
+ * @Comentari:  S'utilitza la funció PrintCharTFT d'ara endavant en lloc del 
+ *              conjunt de funcions exposades a continuació si la mida de la
+ *              lletra és 1. Aquesta mida de lletra no es veia correctament 
+ *              en la pantalla tàctil.
+ *                p. ex:  gfx->setTextColor(WHITE);
+ *                        gfx->setCursor(156, 120); 
+ *                        gfx->setTextSize(2);
+ *                        gfx->println(temperatureC);                              
+ *        
+ **************************************************************************/
 void initSCREEN() {
   gfx->begin();
   gfx->fillScreen(BLACK);
   PrintCharTFT("Connectant l'Estacio a la wifi...", 21, 75, WHITE, BLACK, 1);
 }
 
+/***************************************************************************
+ * @Funció: initWiFi()
+ * @Resum:  Connexió a la xarxa Wi-Fi.
+ * @Comentari:  WiFi.mode(WIFI_STA) Es configura la Wi-Fi estació, dispositiu                                   
+ *                                  des del qual et pots connectar a una xarxa.
+ *                                  Es pot produir el cas contrari i definir 
+ *                                  l'estació com l'acces point. Aparell on els 
+ *                                  altres dispositius es connecten. 
+ *                                    p. ex: WIFI_AP_STA
+ *                                  En cas que l'estació no es trobi connectada    
+ *                                  a la Wi-Fi, aquesta roman en espera mostrant 
+ *                                  "." cada 1 s en el monitor serial fins que 
+ *                                  esdevingui la seva connexió.
+ *                                           
+ **************************************************************************/
+ 
 void initWiFi() {
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
@@ -337,6 +498,12 @@ void initWiFi() {
   delay(1000);
 }
 
+/***************************************************************************
+ * @Funció: initNTP_RTC ()
+ * @Resum:  Configuració i obtenció de la data i l'hora des d'internet.
+ *                                           
+ **************************************************************************/
+ 
 void initNTP_RTC () {
   Serial.println("");
   Serial.println("-------------Configuració NTP-RTC------------");
@@ -355,6 +522,17 @@ void initNTP_RTC () {
   delay(1000);
 }
 
+/***************************************************************************
+ * @Funció: initSDMMC()
+ * @Resum:  Inicialització de la targeta micro SD. S'indica si aquesta ha presentat 
+ *          algún inconvenient com per exemple que hagi estat mal connectada.
+ *          També s'indica el tipus i memòria de targeta. 
+ * @Comentari:  Es recomana emprar targetes micro SD amb un emmagatzematge 
+ *              igual o inferior a 32 GB. Si la targeta utilitzada és superior 
+ *              s'ha de formatar per poder ser utilitzada. 
+ *                                           
+ **************************************************************************/
+ 
 void initSDMMC () {
   Serial.println("");
   Serial.println("--------------Configuració SD MMC--------------");
@@ -379,7 +557,7 @@ void initSDMMC () {
     return;
   }
 
-  Serial.print("Tipues de targeta SD: ");
+  Serial.print("Tipus de targeta SD: ");
   if (cardType == CARD_MMC) {
     Serial.println("MMC");
   } else if (cardType == CARD_SD) {
@@ -395,6 +573,14 @@ void initSDMMC () {
   SD_MMC.end();
   delay(1000);
 }
+
+/***************************************************************************
+ * @Funció: initLITTLEFS()
+ * @Resum:  Inicialització del sistema de fitxers. Es comprova que s'hagi 
+ *          inialitzat correctament, l'espai total, l'espai lliure i l'espai 
+ *          utilitzat. 
+ *                                           
+ **************************************************************************/
 
 void initLITTLEFS () {
   Serial.println("");
@@ -433,6 +619,13 @@ void initLITTLEFS () {
   delay(1000);
 }
 
+/***************************************************************************
+ * @Funció: initTOUCH()
+ * @Resum:  Inicialització de la part tàctil de la pantalla.  
+ * @Comentari:  La pantalla es comunica amb l'ESP32-EVB-EA-IND amb el protocol
+ *              de comunicació SPI i el component tàctil ho fa a través de l'I2C.
+ *                                           
+ **************************************************************************/
 void initTOUCH() {
   Wire.begin();
   pinMode(TFT_DC, OUTPUT);
@@ -440,6 +633,23 @@ void initTOUCH() {
   ts.begin(TS_I2C_ADDRESS);  
 }
 
+/***************************************************************************
+ * @Funció: initPreferences/2/3()
+ * @Resum:  Inicialització de la memòria flash per guardar dades permanentment.  
+ *          Es disposa de tres inicialitzacions cada una corresponent a una 
+ *          variable i la data i l'hora en la qual es van adquirir.
+ * @Comentari: 
+ *      preferences.begin("kValue", false)  
+ *              Es defineix un espai d'emmagatzamatge amb el nom indicat (kValue)  
+ *              en la memòria flash. L'argument false índica que es pot llegir i 
+ *              escriu mentre que l'argument true només permet la lectura de la                           
+ *              memòria.                             
+ *      kValue = preferences.getFloat("kValue", 0.000) 
+ *              Per llegir el valor s'utilitza la funció get.Float. Si no troba                                    
+ *              cap valor, retorna 0.000. 
+ *                                           
+ **************************************************************************/
+ 
 void initPreferences(){
   Serial.println("");
   Serial.println("-----------Configuració Preferences-----------");
@@ -496,6 +706,13 @@ void initPreferences3(){
   preferences.end();
 }
 
+/***************************************************************************
+ * @Funció: displayIQSlogo(
+ * @Resum:  Es mostra el logotip corporatiu de l'Institut Químic de Sarrià
+ *          (IQS). Entitat on s'ha realitzat aquest treball de fi de grau.     
+ *                                           
+ **************************************************************************/
+
 void displayIQSlogo(){
   Serial.println("");
   Serial.println("----------Mostrar el logotip de l'IQS----------");
@@ -504,6 +721,22 @@ void displayIQSlogo(){
   DrawPNG("/IQS100_65.png", 70, 125);
   delay(2000);
 }
+
+/***************************************************************************
+ * @Funció: newDataFile()
+ * @Resum:  Eliminació de l'antic fitxer on es registraven les dades prèviament 
+ *          a ser traspassades a la memòria SD amb la funció LITTLEFS.remove("
+ *          /Dades.csv"). 
+ *          Seguidament, es crea el nou fitxer amb la funció LITTLEFS.open("
+ *          /Dades.csv", FILE_APPEND). On s'insereixen els encapçalaments de la 
+ *          taula on seran recollides les dades. 
+ * @Comentari: 
+ *       LITTLEFS.open("/Dades.csv", FILE_APPEND)
+ *          Dades correspon al nom i .csv al format de l'arxiu. El segon argument, 
+ *          FILE_APPEND permet afegir dades a l'arxiu sense sobreescriure el 
+ *          contingut previ. 
+ *                                           
+ **************************************************************************/
 
 void newDataFile() {
   if (LITTLEFS.remove("/Dades.csv")) {
@@ -538,6 +771,31 @@ void newDataFile() {
   delay(1000);
 }
 
+/***************************************************************************
+ * @Funció: initADS()
+ * @Resum:  Inicialització i configuració del convertidor de senyal analògic  
+ *          a digital.
+ * @Comentari: 
+ *          ads.begin(0x48) Comprovació que s'ha realitzat correctament la
+ *                          inicialització.
+ *          L'ADS1115 presenta dos modes d'operació: el mode d'un sol extrem                
+ *          o el mode diferencial. En el mode d'un sol extrem l'ADC llegeix
+ *          la diferència entre les quatre entrades analògiques (A0-A3) de 
+ *          l'ADS1115 i el GND. En el mode diferencial permet llegir la 
+ *          diferència entre les entrades A0 i A1, per una banda, i A2 i A3 per 
+ *          l'altra. 
+ *          
+ *          Es programa el mode d'operació d'un sol extrem a través de les 
+ *          següents línies de codi:
+ *            ads.setOperateMode(ADS1115_OS_SINGLE);
+ *            ads.setOperateStaus(ADS1115_MODE_SINGLE);
+ *           
+ *          El guany ("ganancia") del convertidor pot ser modificada. S'utilitza  
+ *          el guany que ve establert per defecte. 
+ *            ads.setPGAGain(ADS1115_PGA_6_144);                
+ *                                           
+ **************************************************************************/
+
 void initADS() {
   Serial.println("");
   Serial.println("-------------Configuració ADS1115------------");
@@ -554,6 +812,35 @@ void initADS() {
   ads.setOperateStaus(ADS1115_MODE_SINGLE);
   ads.setPGAGain(ADS1115_PGA_6_144);    
   }
+
+/***************************************************************************
+ * @Funció: writeLITTLEFS ()
+ * @Resum:  Mesura dels diferents paràmetres i còpia al fitxer Dades.csv.
+ *          En primer lloc, s'obre el fitxer amb la funció LITTLEFS.open(),
+ *          tot seguit, es prenen les mesures i són registrades a Dades.csv.
+ *          En últim lloc, mitjançant una seria de condicionals les últimes 
+ *          dades adquirides són mostrades en la pantalla tàctil si són di-
+ *          ferents a les prèvies. Simultàniament, es guarden els màxims i 
+ *          mínims de cada paràmetre també a través de condicionals. Aquests
+ *          valors són mostrats a l'usuari si aquest clica el botó "->".
+ * @Comentari: 
+ *          sensorT.getTempCByIndex(0) 
+ *              S'obté la temperatura en graus Celsius.                 
+ *          temperatureC = 1.01911*temperatureC - 1.01037
+ *              Recta de calibrat del termòmetre obtinguda experimentalment.
+ *          TDS = getTDS ()/ NTU = getTSS()/ pH = getpH()                                
+ *              Aquestes tres funcions es comenten amb més detall en les properes
+ *              lines de codi.
+ *          ads.getConversionResults(channel0)    
+ *              Lectura del voltatge en l'entrada A0 de l'ADS1115 on es troba 
+ *              connectat el sensor de pressió. La pressió es calcula amb les
+ *              següents equacions.
+ *                V = (adc0*0.1875)/1000    
+ *                P = (V - OffSet) * 250
+ *              Les equacions han estat extretes de la pàgina web del fabricant:
+ *              https://wiki.dfrobot.com/Gravity__Water_Pressure_Sensor_SKU__SEN0257
+ *              
+ **************************************************************************/
 
 void writeLITTLEFS () {
   fs::File dataFile = LITTLEFS.open("/Dades.csv", FILE_APPEND);
@@ -689,6 +976,30 @@ void writeLITTLEFS () {
   i++;
 }
 
+/***************************************************************************
+ * @Funció: LITTLEFStoSD ()
+ * @Resum:  Funció per passar les dades des del sistema de fitxers (Littlefs)
+ *          a la targeta de memòria micro SD. Es comprova que s'hagi fet la 
+ *          muntura de la targeta de memòria correctament. S'anomena l'arxiu 
+ *          en què es registraran les dades i s'obren el fitxer emissor i el 
+ *          receptor de la informació. L'emissor és LittleFS i el receptor és
+ *          SD MMC. És dur a terme el traspàs i es tanquen els diferents 
+ *          sistemes que hi han intervingut.        
+ * @Comentari: 
+ *          SD_MMC.begin()
+ *              Comprovació que la muntura s'ha realitzat correctament.
+ *          String filename = "/" + rtc.getTime("%Y%m%d_%H%M") + ".csv";
+ *          pathChar = const_cast<char*>(filename.c_str());    
+ *              Creació del nom de l'arxiu que contindrà les dades. 
+ *          LITTLEFS.open()/ SD_MMC.open(pathChar, FILE_WRITE) 
+ *              Funcions per obrir l'arxiu emissor i receptor. En el cas del 
+ *              receptor, s'ha d'indicar on i amb quin nom es vol guardar 
+ *              el fitxer. El segon argument, FILE_WRITE, permet escriure i  
+ *              llegir en  el document.
+ *          En el bucle while es fa el traspàs d'informació.
+ *          
+ **************************************************************************/
+
 void LITTLEFStoSD () {
   Serial.println("");
   Serial.println("----------Dades de Little FS a SDMMC----------");
@@ -722,6 +1033,12 @@ void LITTLEFStoSD () {
   a++;
 }
 
+/***************************************************************************
+ * @Funció: loadSCREEN()
+ * @Resum:  Pantalla de càrrega on es dóna la benvinguda a l'usuari/ària.         
+ *          
+ **************************************************************************/
+
 void loadSCREEN() {
   gfx->fillScreen(BLACK);
   gfx->setTextColor(WHITE);  gfx->setTextSize(2);
@@ -737,6 +1054,18 @@ void loadSCREEN() {
   
   delay(5000);
 }
+
+/***************************************************************************
+ * @Funció: modeSCREEN()
+ * @Resum:  Pantalla on és seleccionat el mode d'operació a través de dos 
+ *          botons. El mode d'operació potser LOCAL o MQTT.          
+ *          En el mode LOCAL només és necessària la Wi-Fi fins a l'obtenció 
+ *          de la data i l'hora. 
+ *          En el mode MQTT la Wi-Fi és necessària en tot moment perquè les 
+ *          dades mesurades són enviades constantment al monitor de control
+ *          (Broker+Node-Red). 
+ *          
+ **************************************************************************/
 
 void modeSCREEN() {
   gfx->fillScreen(BLACK);
@@ -754,6 +1083,15 @@ void modeSCREEN() {
   gfx->setCursor(84,190);
   gfx->println("MQTT");
 }
+
+/***************************************************************************
+ * @Funció: backgroundSCREEN()
+ * @Resum:  Pantalla que es manté constant mentre funcioni l'ECQA. Es mostra 
+ *          el títol, els botons per habilitar les diferents funcions i un
+ *          parell de condicionals per mostrar en quin mode d'operació s'està
+ *          treballant.
+ *          
+ **************************************************************************/
 
 void backgroundSCREEN(){
   gfx->fillScreen(BLACK);
@@ -824,6 +1162,13 @@ void backgroundSCREEN(){
   }
 }
 
+/***************************************************************************
+ * @Funció: mainSCREEN()
+ * @Resum:  Pantalla que mostra el subtítol i indica quin cada dada a quin
+ *          paràmetre pertany i les seves unitats. 
+ *          
+ **************************************************************************/
+
 void mainSCREEN() {
   gfx->fillRect(0, 50, 240, 229, BLACK);
   
@@ -862,6 +1207,13 @@ void mainSCREEN() {
     gfx->setCursor(0,260);
     gfx->print("pH:");
 }
+
+/***************************************************************************
+ * @Funció: secondSCREEN()
+ * @Resum:  Pantalla que mostra una taula on quedaran recollits els màxims i  
+ *          mínims mesurats fins al moment.
+ *          
+ **************************************************************************/
 
 void secondSCREEN() {
   gfx->fillRect(0, 50, 240, 229, BLACK);
@@ -919,6 +1271,34 @@ void secondSCREEN() {
     gfx->setCursor(180,256);
     gfx->print(minpH);
 }
+
+/***************************************************************************
+ * @Funció: Get_Button()
+ * @Resum:  Funció que estipula quines zones de la pantalla són botons. És 
+ *          roman dins el bucle while sempre que faci menys de tres segons 
+ *          que s'ha clicat la pantalla. Si el temps és superior, a través 
+ *          d'un seguit de condicionals es determina quin botó de la pantalla 
+ *          s'ha clicat.          
+ * @Comentari:         
+ *          p = ts.getPoint() 
+ *              S'obté informació de quina zona ha estat clicada. P és vector
+ *              de tres valors. Les dues primeres corresponen a les coordenades  
+ *              x i y de la pantalla mentre que el tercer, el z, correspon a la 
+ *              força amb què s'ha clicat. 
+ *              Els valors de x i y estan compresos entre 0 i 4095. S'escalen 
+ *              a les dimensions de la pantalla per poder ser més fàcilment 
+ *              interpretats. S'utilitzen la següent funció.
+ *                  p.x = map(p.x, TS_MINX, TS_MAXX, 0, gfx->width())
+ *              El valor de z està comprès entre 0 i 255. Com major és la inten-
+ *              sitat menor valor de z s'obté. S'utilitza un condicional per 
+ *              determinar si la pantalla ha estat o no clicada. 
+ *                  if ( p.z < 10 || p.z > 140 )
+ *              Es prenen de referència els valors de 10 i 140, dins d'aquest 
+ *              rang es considera que la pantalla s'ha clicat. 
+ *              La pantalla pren el valor de z 129 quan es toca contínuament, 
+ *              motiu pel qual es comprova que z sigui diferent aquest valor.
+ *              
+ **************************************************************************/
 
 int Get_Button() {
   int result;
@@ -1003,6 +1383,13 @@ int Get_Button() {
   }
 }
 
+/***************************************************************************
+ * @Funció: displayInfo()
+ * @Resum:  Pantalla que mostra informació general sobre el Treball de Fi                   
+ *          de Grau (TFG).
+ *              
+ **************************************************************************/
+
 void displayInfo() {
   gfx->fillRect(190, 50, 50, 50, BLACK);
   gfx->fillRect(0, 65, 240, 211, ORANGE);
@@ -1019,6 +1406,13 @@ void displayInfo() {
   PrintCharTFT("IQS 2021-2022", 81, 225, BLACK, ORANGE, 1);
   PrintCharTFT("Enginyeria Quimica", 66, 245, BLACK, ORANGE, 1);
 }
+
+/***************************************************************************
+ * @Funció: displayCAL()
+ * @Resum:  Pantalla que mostra la data, hora i valor de k obtingut en l'últi-
+ *          ma calibració del sensor de sòlids dissolts. 
+ *              
+ **************************************************************************/
 
 void displayCAL() {
   gfx->fillRect(190, 50, 50, 50, BLACK);
@@ -1059,6 +1453,13 @@ void displayCAL() {
   Serial.print(kValue);
 }
 
+/***************************************************************************
+ * @Funció: displayCALpH4()
+ * @Resum:  Pantalla que mostra la data, hora i valor d'A obtingut en l'últi-
+ *          ma calibració del sensor de pH amb la dissolució tampó de pH 4,0. 
+ *              
+ **************************************************************************/
+
 void displayCALpH4(){
   gfx->fillRect(0, 65, 240, 211, ORANGE);
   gfx->drawRect(0, 65, 240, 211, WHITE);
@@ -1095,6 +1496,13 @@ void displayCALpH4(){
   Serial.print("Valor 'a' actual: ");
   Serial.print(aValue);
 }
+
+/***************************************************************************
+ * @Funció: displayCALpH7()
+ * @Resum:  Pantalla que mostra la data, hora i valor d'N obtingut en l'últi-
+ *          ma calibració del sensor de pH amb la dissolució tampó de pH 7,0. 
+ *              
+ **************************************************************************/
 
 void displayCALpH7(){
   gfx->fillRect(0, 65, 240, 211, ORANGE);
@@ -1135,6 +1543,13 @@ void displayCALpH7(){
   Serial.print(nValue);
 }
 
+/***************************************************************************
+ * @Funció: displaySD()
+ * @Resum:  Pantalla que es mostra quan s'està realitzant la còpia de segure- 
+ *          tat en la memòria SD. 
+ *              
+ **************************************************************************/
+
 void displaySD() { 
   gfx->fillRect(190, 50, 50, 50, BLACK);
   gfx->fillRect(0, 65, 240, 211, GREEN);
@@ -1147,6 +1562,15 @@ void displaySD() {
   gfx->setCursor(60 , 200); 
   gfx->println("targeta SD");
 }
+
+/***************************************************************************
+ * @Funció: displayTDS()
+ * @Resum:  Pantalla que es mostra quan s'està realitzant la calibració del 
+ *          sensor de sòlids dissolts. Una vegada ha finalitzat s'indica a 
+ *          l'usuari. La calibració és dur a terme a través de la funció 
+ *          getNewkValue ().
+ *              
+ **************************************************************************/
 
 void displayTDS() {
   gfx->fillRect(190, 50, 50, 50, BLACK);
@@ -1166,6 +1590,15 @@ void displayTDS() {
   gfx->println("Finalitzada");
 }
 
+/***************************************************************************
+ * @Funció: displaypH4()
+ * @Resum:  Pantalla que es mostra quan s'està realitzant la calibració del 
+ *          sensor de pH a dissolució tampó pH 4,0. Una vegada ha finalitzat 
+ *          s'indica a l'usuari. La calibració és dur a terme a través de la 
+ *          funció getNewaValue ().          
+ *                          
+ **************************************************************************/
+
 void displaypH4() {
   gfx->fillRect(190, 50, 50, 50, BLACK);
   gfx->fillRect(0, 65, 240, 211, GREEN);
@@ -1182,6 +1615,15 @@ void displaypH4() {
   gfx->println("Finalitzada");
 }
 
+/***************************************************************************
+ * @Funció: displaypH7()
+ * @Resum:  Pantalla que es mostra quan s'està realitzant la calibració del 
+ *          sensor de pH a dissolució tampó pH 7,0. Una vegada ha finalitzat 
+ *          s'indica a l'usuari. La calibració és dur a terme a través de la 
+ *          funció getNewnValue ().          
+ *                          
+ **************************************************************************/
+
 void displaypH7() {
   gfx->fillRect(190, 50, 50, 50, BLACK);
   gfx->fillRect(0, 65, 240, 211, GREEN);
@@ -1197,6 +1639,25 @@ void displaypH7() {
   gfx->setCursor(54 , 220); 
   gfx->println("Finalitzada");
 }
+
+/***************************************************************************
+ * @Funció: getNewkValue()
+ * @Resum:  Càlcul del valor de k per la calibració del sensor de sòlids           
+ *          dissolts. S'inicia de nou la llibreria preferences per poder 
+ *          accedir a la memòria flash (espai on s'emmagatzema el valor 
+ *          de k). Es mesura el voltatge 50 vegades amb intervals de 100 ms
+ *          i posteriorment es calcula la mitjana per eliminar el soroll. 
+ *          Finalment, amb un seguit d'operacions es calcula el valor de k i
+ *          s'emmagatzema en la memòria flash. 
+ *          Equacions extretes de la pàgina web del fabricant:
+ *            https://wiki.dfrobot.com/Gravity__Analog_TDS_Sensor___Meter_
+ *            For_Arduino_SKU__SEN0244 
+ * @Comentari:                         
+ *          voltage = ( sumPreVoltage / samples ) * ( 0.1875 / 1000 )
+ *              El voltatge s'obté de multiplicar la lectura en bits de l'ADC  
+ *              per 0,1875 mV que és equivalent a 1 bit. El factor de 1000
+ *              es fa servir per passar de mV a V.
+ **************************************************************************/
 
 void getNewkValue() {
   Serial.println("Calibració Sòlids dissolts");
@@ -1245,6 +1706,22 @@ void getNewkValue() {
   preferences.end();
 }
 
+/***************************************************************************
+ * @Funció: getNewaValue()
+ * @Resum:  Càlcul del valor de a per la calibració del sensor de pH amb            
+ *          dissolució tampó de pH 4,0. S'inicia de nou la llibreria pre-
+ *          ferences per poder accedir a la memòria flash (espai on s'emma-
+ *          gatzema el valor de a). Es mesura el voltatge 50 vegades amb 
+ *          intervals de 100 ms i posteriorment es calcula la mitjana per 
+ *          eliminar el soroll. Finalment, s'emmagatzema en la memòria flash. 
+ * @Comentari:                         
+ *          adc3 = analogRead(pHSensorPin) * 3.3 / 4096 * 1000
+ *              El voltatge s'obté de multiplicar la lectura en bits de l'ADC  
+ *              pel coeficient del màxim voltatge permés per l'ADC 3,3 V i 4096  
+ *              bits. El factor de 1000 es fa servir per passar de V a mV.
+ *              
+ **************************************************************************/
+
 void getNewaValue() {
   Serial.println("Calibració sensor pH 4,0");
   preferences.begin("aValue", false);
@@ -1289,6 +1766,22 @@ void getNewaValue() {
   
   preferences.end();
 }
+
+/***************************************************************************
+ * @Funció: getNewnValue()
+ * @Resum:  Càlcul del valor de a per la calibració del sensor de pH amb            
+ *          dissolució tampó de pH 7,0. S'inicia de nou la llibreria pre-
+ *          ferences per poder accedir a la memòria flash (espai on s'emma-
+ *          gatzema el valor de n). Es mesura el voltatge 50 vegades amb 
+ *          intervals de 100 ms i posteriorment es calcula la mitjana per 
+ *          eliminar el soroll. Finalment, s'emmagatzema en la memòria flash. 
+ * @Comentari:                         
+ *          adc3 = analogRead(pHSensorPin) * 3.3 / 4096 * 1000
+ *              El voltatge s'obté de multiplicar la lectura en bits de l'ADC  
+ *              pel coeficient del màxim voltatge permés per l'ADC 3,3 V i 4096  
+ *              bits. El factor de 1000 es fa servir per passar de V a mV.
+ *              
+ **************************************************************************/
 
 void getNewnValue() {
   Serial.println("Calibració sensor pH 7,0");
@@ -1335,6 +1828,14 @@ void getNewnValue() {
   preferences.end();
 }
 
+/***************************************************************************
+ * @Funció: getTDS ()
+ * @Resum:  Càlcul dels sòlids dissolts, equacions extretes de la pàgina web 
+ *          del fabricant: https://wiki.dfrobot.com/Gravity__Analog_TDS_Sensor
+ *          ___Meter_For_Arduino_SKU__SEN0244
+ *              
+ **************************************************************************/
+
 int getTDS () {
   adc1 = ads.getConversionResults(channel1);
   voltage = (adc1*0.1875)/1000;
@@ -1347,6 +1848,12 @@ int getTDS () {
   }
   return tdsValue;  
 }
+
+/***************************************************************************
+ * @Funció: getTSS ()
+ * @Resum:  Càlcul de la terbolesa, equacions obtingudes experimentalment.
+ *              
+ **************************************************************************/
 
 int getTSS() {
   adc2 = ads.getConversionResults(channel2);
@@ -1365,6 +1872,13 @@ int getTSS() {
     Serial.println(NTU);
     return NTU;
 }
+
+/***************************************************************************
+ * @Funció: getpH ()
+ * @Resum:  Càlcul del pH, equacions extretes de la pàgina web del fabricant: 
+ *          https://www.dfrobot.com/product-2069.html
+ *              
+ **************************************************************************/
 
 float getpH(){
   int contador = 0;
@@ -1392,6 +1906,37 @@ float getpH(){
   return pH;
 }
 
+/***************************************************************************
+ * @Funció: reconnect()
+ * @Resum:  Funció per reconnectar-se al broker en cas de pèrdua de connexió 
+ *          i rebre publicacions en cas que l'estació estigui subscrita.          
+ *              
+ **************************************************************************/
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Iniciant la connexió amb el Broker");
+    String clienteId = "ESP32";
+    if (client.connect(clienteId.c_str())) {
+      Serial.println(" Connectat");
+      client.subscribe("esp32iot");                  
+    }
+    else {
+      Serial.print("Ha fallat, rc=");
+      Serial.print(client.state());
+      Serial.println(" esperant 3 segons");
+      delay(3000);
+    }
+  }
+}
+
+/***************************************************************************
+ * @Funció: callback ()
+ * @Resum:  Funció per llegir els missatges enviats pel broker a l'ESP32,
+ *          actualment en desús. 
+ *              
+ **************************************************************************/
+
 void callback(String topic, byte* message, unsigned int length) { 
   Serial.print("Missatge que arriba del topic: ");
   Serial.print(topic);
@@ -1402,21 +1947,4 @@ void callback(String topic, byte* message, unsigned int length) {
     messageData += (char)message[i];
   }
   Serial.println();
-}
-
-void reconnect() {
-  while (!client.connected()) {
-    Serial.print("Iniciant la connexió amb el Broker");
-    String clienteId = "ESP32";
-    if (client.connect(clienteId.c_str())) {
-      Serial.println(" Connectat");
-      client.subscribe("esp32iot");                   // Topic para suscribir
-    }
-    else {
-      Serial.print("Ha fallat, rc=");
-      Serial.print(client.state());
-      Serial.println(" esperant 3 segons");
-      delay(3000);
-    }
-  }
 }
